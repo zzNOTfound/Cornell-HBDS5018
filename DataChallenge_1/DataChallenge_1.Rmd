@@ -1,7 +1,7 @@
 ---
 title: "Data Challenge 1: Dairy Cow Visualizations"
 author: "Xueqing Zhou"
-date: "2022-09-27"
+date: "2022-09-28"
 output: html_document
 ---
 
@@ -9,20 +9,129 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r message=FALSE}
 ## load in the required libraries 
 library(readr)
 library(tidyverse)
 library(here)
+library(RColorBrewer)
 
 ## read in the data using here() function
-state_milk_production <- read_csv(here("data/state_milk_production.csv"))
-clean_cheese <- read_csv(here("data/clean_cheese.csv"))
-fluid_milk_sales <- read_csv(here("data/fluid_milk_sales.csv"))
-milk_products_facts <- read_csv(here("data/milk_products_facts.csv"))
-milkcow_facts <- read_csv(here("data/milkcow_facts.csv"))
+state_milk_production <- read_csv(here("DataChallenge_1/data/state_milk_production.csv"))
+clean_cheese <- read_csv(here("DataChallenge_1/data/clean_cheese.csv"))
+fluid_milk_sales <- read_csv(here("DataChallenge_1/data/fluid_milk_sales.csv"))
+milk_products_facts <- read_csv(here("DataChallenge_1/data/milk_products_facts.csv"))
+milkcow_facts <- read_csv(here("DataChallenge_1/data/milkcow_facts.csv"))
 
 ## disable scientific notation
 options(scipen = 999)
+```
+
+### **Figure 1**
+
+```{r fig1_ans, fig.cap = "Figure 1: The plot shows the amount of milk in pounds versus the average number of milk cows, coloring data points by time between 1980 and 2014. In the 1980s, the number of milk cows is high, but the milk production is low. From 1980s to 2000s, the number of milk cows decreases while the milk production keeps increasing. After 2000s, although the number of milk cows does not increases a lot, but the milk production increases rapidly."}
+## plot milk production in pounds vs. average number of milk cows
+milkcow_facts %>%
+  ggplot(aes(avg_milk_cow_number / 1e6, 
+             milk_production_lbs / 1e6, color = year)) +  ## divide by 1 million
+  geom_point() +  ## make a scatterplot
+  labs(x = "Number of Milk Cows \n (in millions)",  ## relabel x axis
+       y = "Pounds of Milk Production \n (in millions)",  ## relabel y axis
+       title = "Milk Production in Pounds VS. Average Number of Milk Cows",  ## add a title
+       color = "Time")  ## label the legend
+```
+
+
+### **Figure 2**
+
+```{r fig2_ans, message=FALSE, fig.cap = "Figure 2: The plot shows the milk production over time, faceted by region. Each region has a plot showing total pounds (in millions) milk produced over time from 1970 to 2017. The total production for Appalachian and Delta States is relatively low compared to other region, and their production tends to decrease a little over time. Corn Belt, Northeast, Northern Plains, Southeast and Southern Plains have a steady total production with some increase over time. Lake States, Mountain and Pacific has a obvious increase in production over time, while Lake States has a higher production startpoint in 1970 compares to the other."}
+## plot milk production vs. year faceted by region
+state_milk_production %>%
+  group_by(year, region) %>%  ## group the observations each year by region
+  summarise(total_prod = sum(milk_produced)) %>%  ## calculate the total production
+  ggplot(aes(year, total_prod / 1e6,  ## divide by 1 million
+             color = region)) +  ## color by region
+  geom_line() +  ## make line plots
+  facet_wrap(~region, nrow = 3) +  ## facet the plot by region, arrange to 3 rows
+  labs(x = "Time",  ## relabel x axis
+       y = "Total Milk Produced (in millions of pounds)",  ## relabel y axis
+       title = "Milk Production Over Year Faceted by Region") +  ## add a title
+  theme(legend.position = "none")  ## remove the legend
+```
+
+
+### **Figure 3**
+
+```{r fig3_ans, fig.cap = "Figure 3: The plot shows the amount (in pounds) of each milk products sold over time from 1975 to 2017. Each milk product has a separate line on the plot. Whole milk production is the highest in 1975, but decreases and becomes almost the same as Reduced Fat (2%) milk in 2017. Eggnog production is overall the lowest. The production of Whole, Skim, Low Fat (1%), Flavored (Not Whole) and  Eggnog production fluctuates and increases, while the production of Reduced Fat (2%), Flavored (Whole), Buttermilk production fluctuates and decreases."}
+## plot amount (in pounds) of each milk products sold over time
+fluid_milk_sales %>%
+  filter(milk_type != "Total Production") %>%
+  ggplot(aes(year, pounds, group = milk_type, color = milk_type)) +  ## group and color by milk type 
+  geom_line() +  ## make line plots
+  scale_y_continuous(trans = 'log10') +  ## make y axis log scale
+  labs(x = "Time",  ## relabel x axis
+       y = "Pounds of Product",  ## relabel y axis
+       title = "Amount (in pounds) of Each Milk Products Sold Over Time") +  ## add a title
+  guides(color = guide_legend(title = "Type of Milk"))  ## label the legend
+```
+
+
+### **Figure 4**
+
+```{r fig4_ans, fig.cap = "Figure 4: The plot shows the different type of cheeses consumed over time from 1970 to 2017. The overall pounds of cheese consumption per people increases. Blue, Brick and Muenster are three types of cheese that consume the least, and remain steady and do not fluctuate much over time. Cheddar takes up the largest proportion of consumption from 1970 to around 1990. Mozzarella consumption increases over time and catches up with Cheddar, and these two cheese consumes the most after 1990. Other types of cheese consumption do not vary a lot."}
+## create a new dataframe `clean_cheese_long`
+clean_cheese_long <- clean_cheese %>%
+  select(-starts_with("Total")) %>%  ## remove all of the total cheese variables
+  pivot_longer(!Year,
+               names_to = "categories", 
+               values_to = "consumption_per_person") %>%  ## change into long format
+  mutate(categories = toupper(categories))  ## capitalized all cheese categories
+
+## plot different type of cheeses consumed over time
+clean_cheese_long %>%
+  filter(!is.na(consumption_per_person)) %>%  ## filter the data to drop NAs
+  ggplot(aes(Year, consumption_per_person, fill = categories)) +  ## color bar plot by categories
+  geom_bar(position = "stack", stat = "identity") +  ## make stacked bar plot
+  labs(x = "Time",  ## relabel x axis
+       y = "Pounds of Cheese Consumption (per people)",  ## relabel y axis
+       title = "Different Type of Cheeses Consumed Over Time") +  ## add a title
+  scale_fill_brewer(palette = "Set3") +  ## color the plot using a palette from RColorBrewer
+  guides(fill = guide_legend(title = "Type of Cheese"))  ## label the legend
+```
+
+
+### **Figure 5**
+
+```{r fig5_ans, fig.cap = "Figure 5: This plot shows the consumption and production trends over time from 1980 to 2014. The consumption line decreases over time, while the production line inreases over time. This indicates that the production amount of milk products surpasses the consumption amount, which could result in export concern."}
+## create a new dataframe `milk_products_facts_long`
+milk_products_facts_long <- milk_products_facts %>%
+  pivot_longer(!year, 
+             names_to = "products",
+             values_to = "lbs_per_person") %>%  #### change into long format
+  group_by(year) %>%  ## group by year
+  summarise(consumption_per_person = sum(lbs_per_person))  ## calculate total consumption
+
+## create a new dataframe `milkcow_facts_production`
+milkcow_facts_production <- milkcow_facts %>%
+  select(year, milk_production_lbs) ## select only column year and production
+
+## merge the two new dataframe together
+consumption_production <- merge(milk_products_facts_long, 
+                                milkcow_facts_production, 
+                                by = "year")
+
+## define colors
+colors <- c("Consumption" = "orange", 
+           "Production" = "green")
+
+## plot consumption and production trends over time
+ggplot(consumption_production) +
+  geom_line(aes(year, consumption_per_person, color = "Consumption")) +  ## make line plot
+  geom_line(aes(year, milk_production_lbs / 1e9, color = "Production")) +  ## divide by 1e9
+  labs(x = "Time",  ## relabel x axis
+       y = "Relative Pounds",  ## relabel y axis
+       color = "",  ## create a legend
+       title = "Consumption and Production Trends Over Time") +  ## add a title
+  scale_color_manual(values = colors) ## add manual colors
 ```
 
