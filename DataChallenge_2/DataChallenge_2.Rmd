@@ -1,0 +1,150 @@
+---
+title: "Data Challenge 2"
+author: "Xueqing Zhou"
+date: "2022-10-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library, message=FALSE}
+## load in the required libraries
+library(readxl)
+library(janitor)
+library(stringr)
+library(tidyverse)
+library(lubridate)
+library(hrbrthemes)
+```
+
+
+### **Problem 1**
+
+```{r p1_ans, warning=FALSE, message=FALSE}
+## read in the data
+mr_trash_wheel <- read_excel("data/Trash-Wheel-Collection-Totals-8-6-19.xlsx",
+                          sheet = "Mr. Trash Wheel", range = cell_cols("A:N"))
+prof_trash_wheel <- read_excel("data/Trash-Wheel-Collection-Totals-8-6-19.xlsx",
+                          sheet = "Professor Trash Wheel")
+cap_trash_wheel <- read_excel("data/Trash-Wheel-Collection-Totals-8-6-19.xlsx",
+                          sheet = "Captain Trash Wheel")
+
+## wrangle the dataset `mr_trash_wheel`
+mr_trash_wheel_clean <- mr_trash_wheel %>%
+  clean_names() %>%  ## clean the column names
+  filter(!is.na(dumpster)) %>%  ## omit rows that do not include dumpster-specific data
+  mutate(wheel = "Mr. Trash Wheel") %>%  ## create new variable identifying data origin
+  select(-c(date, volume_cubic_yards, homes_powered))  ## drop columns that are not needed
+
+## wrangle the dataset `prof_trash_wheel`
+prof_trash_wheel_clean <- prof_trash_wheel %>%
+  clean_names() %>%  ## clean the column names
+  filter(!is.na(dumpster)) %>%  ## omit rows that do not include dumpster-specific data
+  mutate(wheel = "Professor Trash Wheel") %>%  ## create new variable identifying data origin
+  select(-c(date, volume_cubic_yards, homes_powered))  ## drop columns that are not needed
+
+## wrangle the dataset `cap_trash_wheel`
+cap_trash_wheel_clean <- cap_trash_wheel %>%
+  clean_names() %>%  ## clean the column names
+  filter(!is.na(dumpster)) %>%  ## omit rows that do not include dumpster-specific data
+  mutate(wheel = "Captain Trash Wheel") %>%  ## create new variable identifying data origin
+  select(-c(date, volume_cubic_yards, homes_powered))  ## drop columns that are not needed
+
+## create and wrangle the dataset `all_trash_wheels`
+all_trash_wheels <- bind_rows(mr_trash_wheel_clean, 
+                              prof_trash_wheel_clean, 
+                              cap_trash_wheel_clean) %>%  ## bind three dataframes together
+  pivot_longer(cols = c("plastic_bottles":"sports_balls", "plastic_bags"),
+               names_to = "trash_type",
+               values_to = "number") %>%  ## change to long format
+  mutate(trash_type = str_to_title(str_replace(trash_type, "_", " ")))  ## format `trash_type`
+  
+## create and wrangle the dataset `all_trash_wheels_totals_June_2018`
+all_trash_wheels_totals_June_2018 <- all_trash_wheels %>%
+  filter(month == "June" & year == 2018) %>%
+  group_by(wheel, trash_type) %>%
+  summarise(total_num = sum(number))
+
+## make a facted bar plot
+all_trash_wheels_totals_June_2018 %>%
+  ggplot(aes(total_num, wheel, fill = wheel)) +
+  geom_bar(stat = "identity") +  ## make bar plot
+  facet_wrap(~ trash_type, ncol = 2, scales = "free_x") +  ## facet by `trash_type`
+  labs(x = "Amount of Trash",  ## relabel x axis
+       y = "Trash Wheel Type",  ## relabel y axis
+       title = "Amount of Trash Collected by Each Trash Wheel") +  ## add a title
+  theme(legend.position = "none")  ## remove the legend
+```
+
+
+### **Problem 2**
+
+```{r p2_ans, message=FALSE, warning=FALSE}
+## read in the data
+snp <- read_csv("data/snp.csv")
+unemployment <- read_csv("data/unemployment.csv")
+
+## wrangle the dataset `snp`
+snp_clean <- snp %>%
+  mutate(date = mdy(date),  ## convert to a date object
+         date = if_else(year(date) > 2022, date - years(100), date),  ## correct the year problem
+         year = year(date),  ## create a year variable
+         month = month(date))  ## create a month variable
+
+## wrangle the dataset `unemployment`
+unemployment_clean <- unemployment %>%
+  pivot_longer(!Year,
+               names_to = "month",
+               values_to = "rate") %>%  ## change to long format
+  mutate(date = ymd(paste(Year, month, "01")))  ## create a `date` variable
+
+## plot together
+## value used to transform the data
+coeff <- 150 
+
+## define the color constant
+snpColor <- "#69b3a2"
+unemployColor <- rgb(0.2, 0.6, 0.9, 1)
+
+ggplot() +
+  geom_line(data = snp_clean, aes(date, close / coeff), color = snpColor) +  ## divide by `coeff` to get the same range
+  geom_line(data = unemployment_clean, aes(date, rate), color = unemployColor) +  ## make line plot
+  scale_y_continuous(name = "S&P Closing Price",  ## features of first axis
+                     sec.axis = sec_axis(trans = ~.*coeff, name = "Unemployment Rate")) +  ## features of second axis
+  theme_ipsum() +  ## remove the black background
+  theme(axis.title.y = element_text(color = snpColor, size = 13),  ## customize the first y axis
+        axis.title.y.right = element_text(color = unemployColor, size = 13)) +  ## customize the second y axis
+  ggtitle("S&P Closing Price and Unemployment Rate Over Time")  ## add a title
+```     
+         
+
+### **Problem 3**
+
+```{r p3_ans, warning=FALSE}
+## create a dataset `snp_average`
+snp_average <- snp_clean %>%
+  group_by(year, month) %>%  ## group by `year` and `month`
+  mutate(mean_close = mean(close)) %>%  ## calculate the mean closing price
+  mutate(date = ymd(paste(year, month, "01")))  ## create a `date` variable
+
+## join two dataset and make a plot
+merge(snp_average, unemployment_clean, by = "date") %>%  ## join two dataset together
+  filter(date >= "2000-01-01") %>%  ## filter for data after the start of 2000
+  ggplot(aes(mean_close, rate, color = as.factor(year))) +
+  geom_point() +  ## make scatter plot
+  labs(x = "S&P Mean Closing Price",  ## relabel x axis
+       y = "Unemployment Rate",  ## relabel y axis
+       title = "S&P Mean Closing Price Versus Unemployment Rate Over Time ",  ## add a title
+       color = "Year")  ## relabel legend
+```
+
+
+### **Problem 4**
+
+The plot in Problem 2 shows the S&P closing rate and unemployment rate over time from around 1950s to 2015. The S&P closing rate line increases over time, while the unemployment rate line fluctuates a lot and overall increases over time. For S&P closing rate, it has a steady increase from 1950 to 1990, and a rapid increase from 1990 to 2000. It fluctuates from 2000 to 2010, and results in increasing after 2010. For unemployment rate, it fluctuates over time. By comparing the start point in 1948 and the end point in 2015, there is a small overall rate increase.    
+
+The plot in Problem 3 shows the S&P mean closing price versus unemployment rate over time. We can see two downward trends in the scatter plot. As S&P mean closing price increases, the unemployment rate decreases. From 2000 to 2004 and from 2005 to 2008, the S&P mean closing price decreases while the unemployment rate increases. From 2009 to 2015, the S&P mean closing price increases while the unemployment rate decreases. Overall looking, the unemployment rate reaches peak at a value of 10 in 
+year 2009 with S&P mean closing price of 1050.
+
