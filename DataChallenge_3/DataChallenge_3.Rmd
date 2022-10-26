@@ -1,0 +1,102 @@
+---
+title: "Data Challenge 3"
+author: "Xueqing Zhou"
+date: "2022-10-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+## load in the required libraries
+library(readr)
+library(knitr)
+library(tidyverse)
+library(tools)
+library(stringr)
+library(Hmisc)
+
+## read in the data
+coffee_ratings <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv")
+```
+
+
+### **Problem 1**
+
+```{r p1_ans, results='asis'}
+## function that returns the mean and standard deviation of a vector, separate with plus minus sign
+mean_sd <- function(x){
+  return(paste(round(mean(x, na.rm = TRUE), 2), 
+               round(sd(x, na.rm=TRUE), 2), 
+               sep = "\u00B1"))
+}
+
+## function that returns the mean and standard deviation of the aroma through moisture columns 
+## over a specific grouping as a table
+mean_sd_table <- function(data, group_name){
+  data %>%
+    rename(group = all_of(group_name)) %>%  ## select and rename variables from character input vector
+    group_by(group) %>%  ## group by input grouping
+    summarise(across(aroma:moisture, mean_sd)) %>%  ## apply `mean_sd` to column aroma through moisture
+    rename({{group_name}} := "group") %>%  ## set column name to specific grouping name
+    rename_with( ~ str_to_title(gsub("_", " ", .x))) %>%  ## rename column
+    kable(format = "markdown")  ## make a table in Rmarkdown
+}
+
+## clean the dataframe `coffee_ratings`
+coffee_ratings_clean <- coffee_ratings %>%
+  mutate(country_of_origin = replace(country_of_origin, 
+                                     country_of_origin == "Cote d?Ivoire", 
+                                     "Ivory Coast")) %>%  ## rename one specific country
+  mutate(species = if_else(is.na(species), 
+                           "Missing", 
+                           species)) %>%  ## put "Missing" for NAs in `species`
+  mutate(country_of_origin = if_else(is.na(country_of_origin), 
+                                     "Missing", 
+                                     country_of_origin)) %>%  ## put "Missing" for NAs in `country_of_origin`
+  mutate(altitude_mean_meters = if_else(altitude_mean_meters > 5000, 
+                                        NA_real_, 
+                                        altitude_mean_meters)) %>%  ## put any impossible values as missing
+  mutate(binned_altitude_mean_meters = cut2(altitude_mean_meters, 
+                                            c(860, 1720, 2580, 3440))) %>%  ## bin `altitude_mean_meters`
+  mutate(binned_altitude_mean_meters = as.character(binned_altitude_mean_meters)) %>%  ## set as character
+  mutate(binned_altitude_mean_meters = if_else(is.na(binned_altitude_mean_meters), 
+                                               "Missing",
+                                               binned_altitude_mean_meters))  ## put "Missing" for NAs
+
+## calculate tables for the three groups
+## some NAs for standard deviation since there is only one entry for the specific country
+map(list("species", "country_of_origin", "binned_altitude_mean_meters"), 
+    mean_sd_table, 
+    data = coffee_ratings_clean)
+```
+
+
+### **Problem 2**
+
+```{r p2_ans}
+## function that makes a scatterplot of any two variables from the columns aroma through moisture 
+## and colors the points by a particular grouping
+scatterplot <- function(data, var1, var2, group){
+  data %>%
+    filter(get(var1) > 5.5 & get(var2) > 5.5) %>%  ## remove the outliers
+    ggplot(aes(x = get(var1), y = get(var2), color = get(group))) +  ## initiate ggplot
+    geom_jitter(height = 0.4, width = 0.3, alpha = 0.5) +  ## make a aesthetically appealing plot
+    labs(x = str_to_title(var1),  ## relabel x axis
+         y = str_to_title(var2),  ## relabel y axis
+         col = str_to_title(gsub("_", " ", group)),  ## relabel color legend
+         title = paste("Scatterplot of", str_to_title(var1), 
+                       "vs.", str_to_title(var2), 
+                       "by", str_to_title(gsub("_", " ", group))))  ## add a title
+}
+
+## produce two plots
+pmap(list(c("flavor", "body"),
+          c("aroma", "balance"),
+          c("species", "binned_altitude_mean_meters")), 
+     scatterplot, 
+     data = coffee_ratings_clean)
+```
+
