@@ -57,6 +57,17 @@ shinyUI(fluidPage(
         )
       )
     ),
+    p(
+      strong("Codebook: "),
+      HTML(
+        paste0(
+          "Codebook can be found ",
+          tags$a(href="https://htmlpreview.github.io/?https://github.com/higgi13425/medicaldata/blob/master/man/codebooks/strep_tb_codebook.html", 
+                 "here", target="_blank"),
+          "."
+        )
+      )
+    ),
 
     
     ## plots section

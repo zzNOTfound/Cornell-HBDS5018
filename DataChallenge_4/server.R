@@ -61,7 +61,7 @@ shinyServer(function(input, output) {
                     aes(x = rating_month6,
                         y = strep_resistance,
                         col = input$gender)) + 
-      geom_jitter() +
+      geom_jitter(width = 0.2, height = 0.2) +
       labs(title = "Resistance VS. Rating of Chest X-Ray",
            x = "Numeric Rating of Chest X-ray at Month 6",
            y = "Resistance to Steptomycin at Month 6",
@@ -84,7 +84,7 @@ shinyServer(function(input, output) {
                     aes(x = rating_month6,
                         y = .data[[input$baseline]],
                         col = study_arm)) +
-      geom_jitter() +
+      geom_jitter(width = 0.2, height = 0.2) +
       labs(title = "Baseline Condition VS. Rating of Chest X-Ray",
            x = "Numeric Rating of Chest X-Ray at month 6",
            y = str_to_title(gsub("_", " ", input$baseline)),
