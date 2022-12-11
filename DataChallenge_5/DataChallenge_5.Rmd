@@ -1,0 +1,215 @@
+---
+title: "Data Challenge 5"
+author: "Xueqing Zhou"
+date: "2022-12-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+## load in the required libraries
+library(tidyverse)
+library(GGally)
+library(tidytext)
+library(plotly)
+```
+
+
+### **Loading/Cleaning Data and Exploratory Analysis**
+
+```{r p1_ans}
+## read in the data
+nndb_flat <- read.csv("data/nndb_flat.csv")
+
+## filter food groups
+nndb_filter <- nndb_flat %>%
+  filter(FoodGroup == "Vegetables and Vegetable Products" |
+           FoodGroup == "Beef Products" |
+           FoodGroup == "Sweets")
+
+## select required variables
+nndb <- nndb_filter %>%
+  select(Energy_kcal:Zinc_mg)
+
+## make a correlation matrix
+ggcorr(nndb, 
+       size = 3.2, label = TRUE, label_size = 2.5, hjust = 0.9, layout.exp = 4)
+```
+
+We can see from the correlation matrix plot, we do not have any high negative correlation, but we have some high positive correlation. The correlation coefficient of 1 is the highest between `Folate_mcg` and `Thiamin_mg`, which is a perfect positive correlation. Following by the correlation coefficient of 0.9 is between `Protein_g` and `Zinc_mg`, `VitA_mcg` and `Manganese_mg`, `Riboflavin_mg` and `Thiamin_mg`, which considered as high positive correlation. Following by the correlation coefficient of 0.8 is between `Energy_kcal` and `Fat_g`, `Carb_g` and `Sugar_g`, `VitA_mcg` and `VitB12_mcg`, `Folate_mcg` and `Riboflavin_mg`, `Niacin_mg` and `Riboflavin_mg`, `Protein_g` and `Selenium_mcg`, `Protein_g` and `Zinc_mg`, which considered as high positive correlation. 
+
+
+
+### **Performing PCA**
+
+```{r p2ab_ans}
+## perform PCA
+pca_nndb <- prcomp(nndb, center = TRUE, scale. = TRUE)
+
+## create a data frame of PC and cumulative variation for plotting
+var_explained_df <- data.frame(PC = 1:23,
+                               cum_var_explained = summary(pca_nndb)$importance[3,])
+
+## make a plot showing the cumulative proportion of the variation explained by each PC
+x_lab <- paste0("PC", 1:23)
+
+var_explained_df %>%
+  ggplot(aes(x = as.factor(PC), 
+             y = cum_var_explained, 
+             group = 1)) +
+  geom_point() +
+  geom_line() +
+  scale_x_discrete(labels = x_lab) + 
+  labs(x = "PC",
+       y = "Cumulative Variation", 
+       title = "Cumulative Proportion of the Variation Explained by Each PC") +
+  theme(axis.text.x = element_text(size = 7))
+```
+
+```{r p2c_ans, fig.height=14, fig.width=7}
+## create data frame including PC1-PC3 and their corresponding loadings
+pca_nndb_loadings <- as.data.frame(pca_nndb$rotation) %>%
+  select(PC1, PC2, PC3) %>%
+  mutate(variable = rownames(pca_nndb$rotation)) %>%
+  pivot_longer(cols = c("PC1", "PC2", "PC3"),
+               names_to = "PC",
+               values_to = "loadings") 
+
+## make 3 separate plots for the loadings for the first 3 PCs for all of the variables,
+## ordered by the absolute value of the magnitude of the loadings
+pca_nndb_loadings %>%
+  ggplot(aes(x = reorder_within(variable, abs(loadings), PC), y = loadings)) +
+  geom_bar(stat = "identity") +
+  scale_x_reordered() +
+  facet_wrap(~ PC, scales = "free_x", ncol = 1) +
+  theme(axis.text.x = element_text(angle = 50, hjust = 1, size = 9)) +
+  labs(x = "Variable",
+       y = "Loadings",
+       title = "Loadings for Variables by PC")
+```
+
+```{r p2d_ans}
+## create a data frame including scores, PC, food group, and description
+pca_scores <- as.data.frame(pca_nndb$x) %>%
+  mutate(FoodGroup = nndb_filter$FoodGroup,
+         Description = nndb_filter$Descrip)
+
+## PC1 versus PC2
+plot_1vs2 <- ggplot(pca_scores, aes(x = PC1, y = PC2, col = FoodGroup, label = Description)) +
+  geom_point() +
+  labs(title = "PC1 Versus PC2")
+
+ggplotly(plot_1vs2)
+
+## PC1 versus PC3
+plot_1vs3 <- ggplot(pca_scores, aes(x = PC1, y = PC3, col = FoodGroup, label = Description)) +
+  geom_point() +
+  labs(title = "PC1 Versus PC3")
+
+ggplotly(plot_1vs3)
+
+## PC2 versus PC3
+plot_2vs3 <- ggplot(pca_scores, aes(x = PC2, y = PC3, col = FoodGroup, label = Description)) +
+  geom_point() +
+  labs(title = "PC2 Versus PC3")
+
+ggplotly(plot_2vs3)
+```
+
+
+### **Identify Outlier and Performing PCA Again**
+
+The major outlier from the plots above is yeast extract spread from the food group Vegetables and Vegetable Products.
+
+```{r p3a_ans}
+## remove the outlier
+nndb_clean <- nndb_filter %>% 
+  filter(Descrip != "Yeast extract spread")
+
+## select required variables
+nndb_new <- nndb_clean %>%
+  select(Energy_kcal:Zinc_mg)
+
+## perform PCA on new dataset
+pca_nndb_new <- prcomp(nndb_new, center = TRUE, scale. = TRUE)
+
+## create a data frame of PC and cumulative variation for plotting
+var_explained_df_new <- data.frame(PC = 1:23,
+                               cum_var_explained = summary(pca_nndb_new)$importance[3,])
+
+## make a plot showing the cumulative proportion of the variation explained by each PC
+x_lab <- paste0("PC", 1:23)
+
+var_explained_df_new %>%
+  ggplot(aes(x = as.factor(PC), 
+             y = cum_var_explained, 
+             group = 1)) +
+  geom_point() +
+  geom_line() +
+  scale_x_discrete(labels = x_lab) + 
+  labs(x = "PC",
+       y = "Cumulative Variation", 
+       title = "Cumulative Proportion of the Variation Explained by Each PC (no outlier)") +
+  theme(axis.text.x = element_text(size = 7))
+```
+
+```{r p3b_ans, fig.height=14, fig.width=7}
+## create data frame including PC1-PC3 and their corresponding loadings
+pca_nndb_loadings_new <- as.data.frame(pca_nndb_new$rotation) %>%
+  select(PC1, PC2, PC3) %>%
+  mutate(variable = rownames(pca_nndb_new$rotation)) %>%
+  pivot_longer(cols = c("PC1", "PC2", "PC3"),
+               names_to = "PC",
+               values_to = "loadings") 
+
+## make 3 separate plots for the loadings for the first 3 PCs for all of the variables,
+## ordered by the absolute value of the magnitude of the loadings
+pca_nndb_loadings_new %>%
+  ggplot(aes(x = reorder_within(variable, abs(loadings), PC), y = loadings)) +
+  geom_bar(stat = "identity") +
+  scale_x_reordered() +
+  facet_wrap(~ PC, scales = "free_x", ncol = 1) +
+  theme(axis.text.x = element_text(angle = 50, hjust = 1, size = 9)) +
+  labs(x = "Variable",
+       y = "Loadings",
+       title = "Loadings for Variables by PC (no outlier)")
+```
+
+Looking at loadings of the first 3 PCs, they all changed. We can see that the loadings of `Folate_mg` decreases, especially in PC1 that decreases to almost no loadings. The outlier we identified has a significant high value of `Folate_mg` compared to other, so the loadings would decreases. In PC3, we observe that the loadings of `Niacin_mg` change from positive to negative, and that is also because the outlier has significant high value of `Niacin_mg`. Other than these two variables, the outlier also have significant value of other variable. Removing the outlier would caused loadings change.
+
+
+
+```{r p3c_ans}
+## create a data frame including scores, PC, food group, and description
+pca_scores_new <- as.data.frame(pca_nndb_new$x) %>%
+  mutate(FoodGroup = nndb_clean$FoodGroup,
+         Description = nndb_clean$Descrip)
+
+## PC1 versus PC2
+plot_1vs2 <- ggplot(pca_scores_new, aes(x = PC1, y = PC2, col = FoodGroup, label = Description)) +
+  geom_point() +
+  labs(title = "PC1 Versus PC2 (no outlier)")
+
+ggplotly(plot_1vs2)
+
+## PC1 versus PC3
+plot_1vs3 <- ggplot(pca_scores_new, aes(x = PC1, y = PC3, col = FoodGroup, label = Description)) +
+  geom_point() +
+  labs(title = "PC1 Versus PC3 (no outlier)")
+
+ggplotly(plot_1vs3)
+
+## PC2 versus PC3
+plot_2vs3 <- ggplot(pca_scores_new, aes(x = PC2, y = PC3, col = FoodGroup, label = Description)) +
+  geom_point() +
+  labs(title = "PC2 Versus PC3 (no outlier)")
+
+ggplotly(plot_2vs3)
+```
+
+We can see some overlappings between food group in all three plots of score. But overall we can see each food group and clustering together, meaning that the nutritional elements within each group are similar. The overlappings meaning that their nutritional elements are close across food group.        
+Given that most of our loadings for PC1 and PC2 are positive, for the plots of score PC1 vs. PC2, the points lies mostly in the first quadrant (both x-axis and y-axis are positive).    
+Most of our loadings for PC3 are negative, when plotting scores of PC1 vs. PC3 and PC2 vs. PC3, we can see for y-axis (PC3), the majority of points are below 0, while for x-axis (PC1 and PC2), the majority of points are above 0. The points lies mostly in the fourth quadrant (where x-axis is positive and y-axis is negative). 
